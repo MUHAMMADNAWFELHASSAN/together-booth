@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>TogetherBooth — a photobooth for two, wherever you are</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --lilac-bg-1:#f4eefb;
+    --lilac-bg-2:#eee0f7;
+    --plum:#4a3462;
+    --plum-soft:#6d5286;
+    --orchid:#b077d6;
+    --orchid-deep:#9457c4;
+    --blush:#f3c9d7;
+    --cream:#fffbf9;
+    --line:rgba(74,52,98,0.14);
+    --shadow:0 20px 50px -20px rgba(90,52,120,0.35);
+    --radius-lg:28px;
+    --radius-md:18px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100vh;
+    font-family:'Quicksand', sans-serif;
+    color:var(--plum);
+    background:
+      radial-gradient(60% 50% at 15% 10%, #fbe9f5 0%, transparent 60%),
+      radial-gradient(55% 45% at 90% 15%, #e3d4f7 0%, transparent 60%),
+      radial-gradient(70% 60% at 50% 100%, #ead6f6 0%, transparent 55%),
+      linear-gradient(160deg, var(--lilac-bg-1), var(--lilac-bg-2));
+    background-attachment:fixed;
+    overflow-x:hidden;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .drift{
+    position:fixed; inset:0; pointer-events:none; z-index:0; overflow:hidden;
+  }
+  .drift span{
+    position:absolute; bottom:-10%; font-size:22px; opacity:.35;
+    animation:driftUp linear infinite;
+    color:var(--orchid);
+  }
+  @keyframes driftUp{
+    from{ transform:translateY(0) rotate(0deg); opacity:.35;}
+    to{ transform:translateY(-115vh) rotate(25deg); opacity:0;}
+  }
+
+  header.brand{
+    position:relative; z-index:1;
+    margin-top:38px; text-align:center;
+  }
+  header.brand .eyebrow{
+    font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--orchid-deep); font-weight:600; margin-bottom:6px;
+  }
+  header.brand h1{
+    font-family:'Fraunces', serif; font-weight:500; font-style:italic;
+    font-size:clamp(30px,6vw,46px); margin:0; color:var(--plum);
+    letter-spacing:.01em;
+  }
+  header.brand p{
+    margin:8px 0 0; font-size:15px; color:var(--plum-soft); font-weight:500;
+  }
+
+  main{ position:relative; z-index:1; width:100%; max-width:920px; padding:26px 20px 70px; display:flex; flex-direction:column; align-items:center; }
+
+  .screen{ width:100%; display:none; flex-direction:column; align-items:center; }
+  .screen.active{ display:flex; animation:fadeUp .5s ease; }
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);} }
+
+  .card{
+    width:100%; max-width:480px; background:var(--cream);
+    border-radius:var(--radius-lg); box-shadow:var(--shadow);
+    padding:34px 30px; border:1px solid var(--line); position:relative;
+  }
+  .card::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; padding:1px;
+    background:linear-gradient(135deg, rgba(176,119,214,.5), rgba(243,201,215,.2));
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none;
+  }
+
+  h2.card-title{
+    font-family:'Fraunces', serif; font-weight:500; font-size:23px; margin:0 0 6px;
+  }
+  p.card-sub{ margin:0 0 22px; color:var(--plum-soft); font-size:14.5px; line-height:1.5; }
+
+  .path-row{ display:flex; flex-direction:column; gap:14px; }
+  .path-btn{
+    display:flex; align-items:center; gap:14px; width:100%; text-align:left;
+    padding:16px 18px; border-radius:var(--radius-md); border:1.5px solid var(--line);
+    background:linear-gradient(135deg,#fff,#fbf5ff); cursor:pointer;
+    font-family:'Quicksand',sans-serif; font-weight:700; font-size:15.5px; color:var(--plum);
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .path-btn:hover{ transform:translateY(-2px); box-shadow:0 10px 24px -12px rgba(148,87,196,.45); border-color:var(--orchid); }
+  .path-btn .ic{
+    width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg,var(--orchid),var(--orchid-deep)); color:#fff; font-size:19px; flex:none;
+  }
+  .path-btn small{ display:block; font-weight:500; color:var(--plum-soft); font-size:12.5px; margin-top:2px; }
+
+  .join-form{ display:none; margin-top:16px; gap:10px; flex-direction:column; }
+  .join-form.active{ display:flex; }
+  input.code-input{
+    width:100%; padding:14px 16px; border-radius:14px; border:1.5px solid var(--line);
+    font-family:'Quicksand',sans-serif; font-size:16px; font-weight:700; letter-spacing:.12em;
+    text-transform:uppercase; text-align:center; color:var(--plum); background:#fff;
+  }
+  input.code-input:focus{ outline:none; border-color:var(--orchid); }
+
+  button.primary{
+    padding:14px 20px; border:none; border-radius:14px; cursor:pointer;
+    background:linear-gradient(135deg,var(--orchid),var(--orchid-deep)); color:#fff;
+    font-family:'Quicksand',sans-serif; font-weight:700; font-size:15px;
+    box-shadow:0 12px 24px -12px rgba(148,87,196,.6);
+    transition:transform .15s ease;
+  }
+  button.primary:hover{ transform:translateY(-1px); }
+  button.primary:active{ transform:translateY(0); }
+  button.ghost{
+    padding:10px 16px; border-radius:12px; border:1.5px solid var(--line); background:transparent;
+    color:var(--plum-soft); font-family:'Quicksand',sans-serif; font-weight:700; font-size:13.5px; cursor:pointer;
+  }
+
+  .status-line{ display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--plum-soft); font-weight:600; margin-top:16px; justify-content:center;}
+  .dot{ width:8px; height:8px; border-radius:50%; background:#d9a4c0; }
+  .dot.live{ background:#7fd19c; box-shadow:0 0 0 4px rgba(127,209,156,.25); }
+  .dot.pulse{ animation:pulseDot 1.2s ease-in-out infinite; }
+  @keyframes pulseDot{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+  .code-display{
+    margin-top:18px; text-align:center; padding:16px; border-radius:16px;
+    background:linear-gradient(135deg,#f6ecfb,#fbeef4); border:1.5px dashed var(--orchid);
+  }
+  .code-display .label{ font-size:11.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--orchid-deep); font-weight:700; }
+  .code-display .value{ font-family:'Fraunces',serif; font-weight:600; font-size:30px; letter-spacing:.08em; margin-top:4px; color:var(--plum); }
+  .code-display .hint{ font-size:12px; color:var(--plum-soft); margin-top:6px; }
+
+  /* ---------- Booth screen ---------- */
+  .booth-wrap{ width:100%; display:flex; flex-direction:column; align-items:center; }
+  .video-duo{
+    display:flex; gap:14px; width:100%; justify-content:center; position:relative;
+  }
+  .video-pane{
+    position:relative; flex:1; max-width:280px; aspect-ratio:3/4; border-radius:22px; overflow:hidden;
+    background:#2c1f3a; box-shadow:var(--shadow); border:3px solid var(--cream); outline:1px solid var(--line);
+  }
+  .video-pane video{ width:100%; height:100%; object-fit:cover; display:block; transform:scaleX(-1); }
+  .video-pane .tag{
+    position:absolute; left:10px; bottom:10px; background:rgba(74,52,98,.55); color:#fff;
+    font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:20px; backdrop-filter:blur(3px);
+  }
+  .video-pane .empty{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px;
+    color:#ecd9f7; font-size:13px; text-align:center; padding:20px; font-weight:600;
+  }
+  .heart-link{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:3;
+    width:38px; height:38px; border-radius:50%; background:var(--cream); box-shadow:var(--shadow);
+    display:flex; align-items:center; justify-content:center; font-size:17px; border:2px solid var(--blush);
+  }
+
+  .countdown-overlay{
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(43,26,58,.32); z-index:5; border-radius:22px;
+  }
+  .video-duo.counting .countdown-overlay{ display:flex; }
+  .countdown-overlay span{
+    font-family:'Fraunces',serif; font-weight:600; font-size:64px; color:#fff;
+    text-shadow:0 6px 18px rgba(0,0,0,.35); animation:pop .8s ease;
+  }
+  @keyframes pop{ 0%{transform:scale(.4); opacity:0;} 40%{transform:scale(1.15); opacity:1;} 100%{transform:scale(1); opacity:1;} }
+
+  .flash{
+    position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:50;
+  }
+  .flash.go{ animation:flashPop .32s ease; }
+  @keyframes flashPop{ 0%{opacity:0;} 15%{opacity:.9;} 100%{opacity:0;} }
+
+  .shots-track{ display:flex; gap:8px; margin-top:16px; }
+  .shots-track .pip{ width:9px; height:9px; border-radius:50%; background:var(--line); }
+  .shots-track .pip.done{ background:var(--orchid); }
+
+  .capture-row{ display:flex; align-items:center; gap:22px; margin-top:22px; }
+  .shutter{
+    width:74px; height:74px; border-radius:50%; border:5px solid var(--cream);
+    background:radial-gradient(circle at 35% 30%, #d99fe8, var(--orchid-deep));
+    box-shadow:0 14px 28px -10px rgba(148,87,196,.65); cursor:pointer; position:relative;
+    display:flex; align-items:center; justify-content:center; font-size:26px; color:#fff;
+    transition:transform .15s ease;
+  }
+  .shutter:hover{ transform:scale(1.05); }
+  .shutter:active{ transform:scale(.95); }
+  .shutter[disabled]{ opacity:.5; pointer-events:none; }
+
+  .icon-btn{
+    width:46px; height:46px; border-radius:50%; border:1.5px solid var(--line); background:var(--cream);
+    display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer; color:var(--plum-soft);
+  }
+
+  .caption-input{
+    margin-top:20px; width:100%; max-width:400px; text-align:center; padding:10px 14px;
+    border:1.5px dashed var(--line); border-radius:14px; background:rgba(255,255,255,.5);
+    font-family:'Fraunces',serif; font-style:italic; font-size:14.5px; color:var(--plum-soft);
+  }
+  .caption-input:focus{ outline:none; border-color:var(--orchid); color:var(--plum); }
+
+  /* ---------- Strip preview ---------- */
+  .strip-frame{
+    background:var(--cream); padding:16px 16px 20px; border-radius:16px; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .strip-frame canvas{ max-width:100%; border-radius:8px; display:block; }
+  .strip-actions{ display:flex; gap:12px; margin-top:20px; flex-wrap:wrap; justify-content:center; }
+
+  /* ---------- Gallery ---------- */
+  .gallery-toggle{
+    position:fixed; right:18px; bottom:18px; z-index:20;
+    width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,var(--orchid),var(--orchid-deep));
+    color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer;
+    box-shadow:0 14px 30px -10px rgba(148,87,196,.6); border:3px solid var(--cream);
+  }
+  .gallery-badge{
+    position:absolute; top:-4px; right:-4px; background:var(--blush); color:var(--plum);
+    font-size:11px; font-weight:800; border-radius:50%; width:20px; height:20px; display:flex;
+    align-items:center; justify-content:center; border:2px solid var(--cream);
+  }
+  .gallery-panel{
+    position:fixed; inset:0; background:rgba(58,38,77,.45); backdrop-filter:blur(2px); z-index:30;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .gallery-panel.open{ display:flex; }
+  .gallery-sheet{
+    width:100%; max-width:640px; max-height:78vh; background:var(--lilac-bg-1); border-radius:26px 26px 0 0;
+    padding:20px 20px 26px; overflow-y:auto; box-shadow:0 -20px 50px rgba(60,30,80,.3);
+    animation:slideUp .3s ease;
+  }
+  @keyframes slideUp{ from{transform:translateY(30px); opacity:.4;} to{transform:translateY(0); opacity:1;} }
+  .gallery-sheet h3{ font-family:'Fraunces',serif; font-weight:500; margin:0 0 4px; font-size:20px; }
+  .gallery-sheet p.sub{ margin:0 0 16px; font-size:13px; color:var(--plum-soft); }
+  .gallery-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:12px; }
+  .gallery-grid img{
+    width:100%; border-radius:10px; cursor:pointer; box-shadow:0 6px 16px -8px rgba(90,52,120,.4);
+    border:2px solid #fff; display:block;
+  }
+  .gallery-empty{ text-align:center; padding:30px 10px; color:var(--plum-soft); font-size:14px; }
+
+  footer{ position:relative; z-index:1; margin-top:auto; padding:22px; font-size:12px; color:var(--plum-soft); text-align:center; }
+
+  @media (max-width:520px){
+    .video-pane{ max-width:none; }
+    .card{ padding:26px 20px; }
+  }
+
+  [hidden]{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="drift" id="drift"></div>
+<div class="flash" id="flash"></div>
+
+<header class="brand">
+  <div class="eyebrow">Together, no matter the distance</div>
+  <h1>TogetherBooth</h1>
+  <p>a little photobooth built for my COCO and ME</p>
+</header>
+
+<main>
+
+  <!-- LANDING -->
+  <section class="screen active" id="screen-landing">
+    <div class="card">
+      <h2 class="card-title">Start your date</h2>
+      <p class="card-sub">Open a booth and share the code with her, or hop into the one she already started.</p>
+
+      <div class="path-row" id="path-row">
+        <button class="path-btn" id="btn-host">
+          <span class="ic">✦</span>
+          <span>
+            Start a new booth
+            <small>Get a code to send </small>
+          </span>
+        </button>
+        <button class="path-btn" id="btn-join">
+          <span class="ic">♡</span>
+          <span>
+            Join her booth
+            <small>Enter the code </small>
+          </span>
+        </button>
+      </div>
+
+      <div class="join-form" id="join-form">
+        <input type="text" maxlength="5" class="code-input" id="code-input" placeholder="C0DE">
+        <button class="primary" id="btn-connect">Join booth</button>
+        <button class="ghost" id="btn-back-join" style="align-self:center;">← back</button>
+      </div>
+
+      <div class="code-display" id="code-display" hidden>
+        <div class="label">Your booth code</div>
+        <div class="value" id="room-code-value">— — — — —</div>
+        <div class="hint">Send this and then wait right here</div>
+      </div>
+
+      <div class="status-line" id="landing-status" hidden>
+        <span class="dot pulse" id="landing-dot"></span>
+        <span id="landing-status-text">Setting up your camera…</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOOTH -->
+  <section class="screen" id="screen-booth">
+    <div class="booth-wrap">
+      <div class="video-duo" id="video-duo">
+        <div class="video-pane">
+          <video id="video-local" autoplay playsinline muted></video>
+          <div class="tag">you</div>
+        </div>
+        <div class="video-pane">
+          <video id="video-remote" autoplay playsinline></video>
+          <div class="empty" id="remote-empty">wait for joining…</div>
+          <div class="tag" hidden id="remote-tag">her</div>
+        </div>
+        <div class="heart-link">♡</div>
+        <div class="countdown-overlay" id="countdown-overlay"><span id="countdown-number">3</span></div>
+      </div>
+
+      <div class="shots-track" id="shots-track">
+        <span class="pip"></span><span class="pip"></span><span class="pip"></span>
+      </div>
+
+      <div class="capture-row">
+        <button class="icon-btn" id="btn-leave" title="Leave booth">✕</button>
+        <button class="shutter" id="btn-shoot" title="Take the strip">📷</button>
+        <button class="icon-btn" id="btn-swap" title="Switch camera">⟳</button>
+      </div>
+
+      <input type="text" class="caption-input" id="caption-input" maxlength="40" placeholder="write a little caption for this strip…">
+
+      <div class="status-line">
+        <span class="dot live" id="booth-dot"></span>
+        <span id="booth-status-text">connected</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- STRIP PREVIEW -->
+  <section class="screen" id="screen-strip">
+    <div class="strip-frame">
+      <canvas id="strip-canvas"></canvas>
+      <div class="strip-actions">
+        <button class="primary" id="btn-save">💾 Save to your photos</button>
+        <button class="ghost" id="btn-gallery-add">Keep in gallery</button>
+        <button class="ghost" id="btn-retake">Take another</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="gallery-toggle" id="gallery-toggle">
+  🎞️
+  <span class="gallery-badge" id="gallery-badge" hidden>0</span>
+</div>
+
+<div class="gallery-panel" id="gallery-panel">
+  <div class="gallery-sheet">
+    <h3>Your strips</h3>
+    <p class="sub">Saved on this device, just for us .</p>
+    <div class="gallery-grid" id="gallery-grid"></div>
+    <div class="gallery-empty" id="gallery-empty" hidden>No strips yet — lets make one 💜</div>
+  </div>
+</div>
+
+<footer>made with ♡ for my COCO.</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- floating hearts backdrop ---------------- */
+  const driftEl = document.getElementById('drift');
+  const glyphs = ['♡','✦','·'];
+  for(let i=0;i<14;i++){
+    const s = document.createElement('span');
+    s.textContent = glyphs[i % glyphs.length];
+    s.style.left = (Math.random()*100)+'%';
+    s.style.animationDuration = (14 + Math.random()*14)+'s';
+    s.style.animationDelay = (Math.random()*12)+'s';
+    s.style.fontSize = (14 + Math.random()*18)+'px';
+    driftEl.appendChild(s);
+  }
+
+  /* ---------------- element refs ---------------- */
+  const screens = {
+    landing: document.getElementById('screen-landing'),
+    booth: document.getElementById('screen-booth'),
+    strip: document.getElementById('screen-strip'),
+  };
+  function showScreen(name){
+    Object.values(screens).forEach(s=>s.classList.remove('active'));
+    screens[name].classList.add('active');
+  }
+
+  const btnHost = document.getElementById('btn-host');
+  const btnJoin = document.getElementById('btn-join');
+  const pathRow = document.getElementById('path-row');
+  const joinForm = document.getElementById('join-form');
+  const codeInput = document.getElementById('code-input');
+  const btnConnect = document.getElementById('btn-connect');
+  const btnBackJoin = document.getElementById('btn-back-join');
+  const codeDisplay = document.getElementById('code-display');
+  const roomCodeValue = document.getElementById('room-code-value');
+  const landingStatus = document.getElementById('landing-status');
+  const landingStatusText = document.getElementById('landing-status-text');
+  const landingDot = document.getElementById('landing-dot');
+
+  const videoLocal = document.getElementById('video-local');
+  const videoRemote = document.getElementById('video-remote');
+  const remoteEmpty = document.getElementById('remote-empty');
+  const remoteTag = document.getElementById('remote-tag');
+  const videoDuo = document.getElementById('video-duo');
+  const countdownOverlay = document.getElementById('countdown-overlay');
+  const countdownNumber = document.getElementById('countdown-number');
+  const flashEl = document.getElementById('flash');
+  const shotsTrack = document.getElementById('shots-track');
+  const btnShoot = document.getElementById('btn-shoot');
+  const btnLeave = document.getElementById('btn-leave');
+  const btnSwap = document.getElementById('btn-swap');
+  const captionInput = document.getElementById('caption-input');
+  const boothStatusText = document.getElementById('booth-status-text');
+  const boothDot = document.getElementById('booth-dot');
+
+  const stripCanvas = document.getElementById('strip-canvas');
+  const btnSave = document.getElementById('btn-save');
+  const btnGalleryAdd = document.getElementById('btn-gallery-add');
+  const btnRetake = document.getElementById('btn-retake');
+
+  const galleryToggle = document.getElementById('gallery-toggle');
+  const galleryBadge = document.getElementById('gallery-badge');
+  const galleryPanel = document.getElementById('gallery-panel');
+  const galleryGrid = document.getElementById('gallery-grid');
+  const galleryEmpty = document.getElementById('gallery-empty');
+
+  /* ---------------- state ---------------- */
+  let peer = null;
+  let currentCall = null;
+  let localStream = null;
+  let remoteStream = null;
+  let isHost = false;
+  let facingMode = 'user';
+  const SHOTS_NEEDED = 3;
+  let capturedFrames = []; // dataURLs sized for strip
+
+  /* ---------------- camera ---------------- */
+  async function getLocalStream(mode){
+    if(localStream){
+      localStream.getTracks().forEach(t=>t.stop());
+    }
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode: mode || facingMode }, audio:false
+    });
+    videoLocal.srcObject = localStream;
+    return localStream;
+  }
+
+  /* ---------------- room code helpers ---------------- */
+  function makeCode(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = '';
+    for(let i=0;i<5;i++) out += chars[Math.floor(Math.random()*chars.length)];
+    return out;
+  }
+
+  function setLandingStatus(text, live){
+    landingStatus.hidden = false;
+    landingStatusText.textContent = text;
+    landingDot.classList.toggle('live', !!live);
+    landingDot.classList.toggle('pulse', !live);
+  }
+
+  /* ---------------- peer setup ---------------- */
+  function wireIncomingCall(){
+    peer.on('call', call=>{
+      call.answer(localStream);
+      currentCall = call;
+      call.on('stream', stream=>{
+        remoteStream = stream;
+        videoRemote.srcObject = stream;
+        remoteEmpty.hidden = true;
+        remoteTag.hidden = false;
+        boothStatusText.textContent = "you're both here 💜";
+        showScreen('booth');
+      });
+      call.on('close', onPeerLeft);
+    });
+  }
+
+  function onPeerLeft(){
+    remoteStream = null;
+    videoRemote.srcObject = null;
+    remoteEmpty.hidden = false;
+    remoteTag.hidden = true;
+    boothStatusText.textContent = "she stepped away — waiting…";
+  }
+
+  async function startHost(){
+    try{
+      setLandingStatus('Setting up your camera…', false);
+      await getLocalStream();
+      const code = makeCode();
+      peer = new Peer('tbooth-' + code, { debug: 0 });
+      peer.on('open', ()=>{
+        roomCodeValue.textContent = code.split('').join(' ');
+        codeDisplay.hidden = false;
+        pathRow.hidden = true;
+        setLandingStatus('Waiting for her to join…', false);
+        isHost = true;
+        wireIncomingCall();
+      });
+      peer.on('error', err=>{
+        setLandingStatus('Something went wrong: ' + (err.type || 'connection error'), false);
+      });
+    }catch(e){
+      setLandingStatus('Camera access is needed for the booth to work 💜', false);
+    }
+  }
+
+  async function startJoin(){
+    joinForm.classList.add('active');
+    pathRow.hidden = true;
+  }
+
+  async function connectToHost(code){
+    try{
+      setLandingStatus('Setting up your camera…', false);
+      await getLocalStream();
+      peer = new Peer(undefined, { debug: 0 });
+      peer.on('open', ()=>{
+        setLandingStatus('Connecting to her booth…', false);
+        const call = peer.call('tbooth-' + code.toUpperCase(), localStream);
+        currentCall = call;
+        call.on('stream', stream=>{
+          remoteStream = stream;
+          videoRemote.srcObject = stream;
+          remoteEmpty.hidden = true;
+          remoteTag.hidden = false;
+          boothStatusText.textContent = "you're both here 💜";
+          showScreen('booth');
+        });
+        call.on('close', onPeerLeft);
+        call.on('error', ()=>{
+          setLandingStatus('Could not reach that code — double check it and try again', false);
+        });
+      });
+      peer.on('error', err=>{
+        setLandingStatus('Could not connect — check the code and try again', false);
+      });
+    }catch(e){
+      setLandingStatus('Camera access is needed for the booth to work 💜', false);
+    }
+  }
+
+  btnHost.addEventListener('click', startHost);
+  btnJoin.addEventListener('click', startJoin);
+  btnBackJoin.addEventListener('click', ()=>{
+    joinForm.classList.remove('active');
+    pathRow.hidden = false;
+  });
+  btnConnect.addEventListener('click', ()=>{
+    const code = codeInput.value.trim();
+    if(code.length < 4){ codeInput.focus(); return; }
+    connectToHost(code);
+  });
+  codeInput.addEventListener('input', ()=>{
+    codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  });
+
+  btnSwap.addEventListener('click', async ()=>{
+    facingMode = facingMode === 'user' ? 'environment' : 'user';
+    try{
+      const stream = await getLocalStream(facingMode);
+      if(currentCall && currentCall.peerConnection){
+        const sender = currentCall.peerConnection.getSenders().find(s=>s.track && s.track.kind==='video');
+        if(sender) sender.replaceTrack(stream.getVideoTracks()[0]);
+      }
+    }catch(e){ /* ignore, camera may not have both facings */ }
+  });
+
+  btnLeave.addEventListener('click', ()=>{
+    if(currentCall) currentCall.close();
+    if(peer) peer.destroy();
+    location.reload();
+  });
+
+  /* ---------------- countdown + capture ---------------- */
+  function wait(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+  async function runCountdown(){
+    videoDuo.classList.add('counting');
+    for(let n=3; n>=1; n--){
+      countdownNumber.textContent = n;
+      countdownNumber.style.animation = 'none';
+      void countdownNumber.offsetWidth;
+      countdownNumber.style.animation = '';
+      await wait(800);
+    }
+    videoDuo.classList.remove('counting');
+  }
+
+  function grabFramePair(){
+    // draws local + remote side by side into one landscape shot
+    const w = 640, h = 400, half = w/2;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#2c1f3a';
+    ctx.fillRect(0,0,w,h);
+
+    function drawMirrored(video, x){
+      if(!video.srcObject) return;
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if(!vw || !vh) return;
+      const targetRatio = half/h, srcRatio = vw/vh;
+      let sx,sy,sw,sh;
+      if(srcRatio > targetRatio){ sh = vh; sw = vh*targetRatio; sx=(vw-sw)/2; sy=0; }
+      else { sw = vw; sh = vw/targetRatio; sx=0; sy=(vh-sh)/2; }
+      ctx.save();
+      ctx.translate(x + half, 0);
+      ctx.scale(-1,1);
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, half, h);
+      ctx.restore();
+    }
+    drawMirrored(videoLocal, 0);
+    drawMirrored(videoRemote, half);
+
+    // thin divider
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillRect(half-1,0,2,h);
+
+    return c;
+  }
+
+  function flash(){
+    flashEl.classList.remove('go');
+    void flashEl.offsetWidth;
+    flashEl.classList.add('go');
+  }
+
+  function updatePips(count){
+    const pips = shotsTrack.querySelectorAll('.pip');
+    pips.forEach((p,i)=> p.classList.toggle('done', i < count));
+  }
+
+  async function takeStrip(){
+    btnShoot.setAttribute('disabled','true');
+    capturedFrames = [];
+    updatePips(0);
+    for(let i=0;i<SHOTS_NEEDED;i++){
+      await runCountdown();
+      flash();
+      const frameCanvas = grabFramePair();
+      capturedFrames.push(frameCanvas);
+      updatePips(i+1);
+      await wait(500);
+    }
+    composeStrip();
+    showScreen('strip');
+    btnShoot.removeAttribute('disabled');
+  }
+
+  btnShoot.addEventListener('click', takeStrip);
+
+  /* ---------------- compose final strip ---------------- */
+  function composeStrip(){
+    const shotW = 480, shotH = 300, pad = 24, gap = 16, footer = 88;
+    const totalH = pad + (shotH+gap)*capturedFrames.length + footer;
+    const totalW = shotW + pad*2;
+
+    stripCanvas.width = totalW;
+    stripCanvas.height = totalH;
+    const ctx = stripCanvas.getContext('2d');
+
+    // background
+    const grad = ctx.createLinearGradient(0,0,0,totalH);
+    grad.addColorStop(0,'#fffbf9');
+    grad.addColorStop(1,'#fbeef4');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,totalW,totalH);
+
+    capturedFrames.forEach((frame,i)=>{
+      const y = pad + i*(shotH+gap);
+      ctx.drawImage(frame, pad, y, shotW, shotH);
+      ctx.strokeStyle = 'rgba(74,52,98,0.15)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(pad, y, shotW, shotH);
+    });
+
+    // footer text
+    const footY = totalH - footer/2;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#4a3462';
+    ctx.font = 'italic 500 26px Fraunces, serif';
+    const caption = (captionInput.value || 'together, always ♡').slice(0,40);
+    ctx.fillText(caption, totalW/2, footY - 6);
+
+    ctx.font = '600 13px Quicksand, sans-serif';
+    ctx.fillStyle = '#9457c4';
+    const dateStr = new Date().toLocaleDateString(undefined, {month:'long', day:'numeric', year:'numeric'});
+    ctx.fillText('TogetherBooth  ·  ' + dateStr, totalW/2, footY + 20);
+  }
+
+  btnRetake.addEventListener('click', ()=>{ showScreen('booth'); });
+
+  /* ---------------- saving ---------------- */
+  function canvasToBlob(){
+    return new Promise(resolve=> stripCanvas.toBlob(resolve, 'image/png', 0.95));
+  }
+
+  btnSave.addEventListener('click', async ()=>{
+    const blob = await canvasToBlob();
+    const file = new File([blob], 'togetherbooth-strip.png', {type:'image/png'});
+
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{
+        await navigator.share({ files:[file], title:'TogetherBooth strip' });
+        return;
+      }catch(e){ /* user cancelled or unsupported, fall through to download */ }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'togetherbooth-strip-' + Date.now() + '.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  });
+
+  /* ---------------- gallery (saved locally on this device) ---------------- */
+  const GALLERY_KEY = 'togetherbooth-gallery';
+
+  function loadGallery(){
+    try{ return JSON.parse(localStorage.getItem(GALLERY_KEY) || '[]'); }
+    catch(e){ return []; }
+  }
+  function saveGalleryList(list){
+    try{ localStorage.setItem(GALLERY_KEY, JSON.stringify(list)); }catch(e){ /* storage full */ }
+  }
+  function renderGallery(){
+    const list = loadGallery();
+    galleryGrid.innerHTML = '';
+    galleryEmpty.hidden = list.length !== 0;
+    galleryBadge.hidden = list.length === 0;
+    galleryBadge.textContent = list.length;
+    list.slice().reverse().forEach(dataUrl=>{
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.addEventListener('click', ()=>{
+        const w = window.open();
+        if(w){ w.document.write('<img src="'+dataUrl+'" style="max-width:100%;">'); }
+      });
+      galleryGrid.appendChild(img);
+    });
+  }
+
+  btnGalleryAdd.addEventListener('click', ()=>{
+    const dataUrl = stripCanvas.toDataURL('image/png');
+    const list = loadGallery();
+    list.push(dataUrl);
+    saveGalleryList(list);
+    renderGallery();
+    btnGalleryAdd.textContent = 'Saved ✓';
+    setTimeout(()=> btnGalleryAdd.textContent = 'Keep in gallery', 1500);
+  });
+
+  galleryToggle.addEventListener('click', ()=>{
+    renderGallery();
+    galleryPanel.classList.add('open');
+  });
+  galleryPanel.addEventListener('click', (e)=>{
+    if(e.target === galleryPanel) galleryPanel.classList.remove('open');
+  });
+
+  renderGallery();
+})();
+</script>
+</body>
+</html>
